@@ -5,7 +5,7 @@ using namespace std;
 
 class Ext {
 	public:
-		Ext(long long x = 100000);
+		Ext(long long x = 1000);
 	private:
 		void generate_input();
 		//void read();
@@ -16,7 +16,9 @@ class Ext {
 		void replacement_selection();
 		void multiway_merge();
 		void fill_RAM();
+		bool is_RAM_empty();
 		int fill_input_buffer();
+		bool is_input_buffer_empty(); // used in replacement selection to judge whether input buffer has elements
 		int calc_RAM();
 		bool is_output_buffer_full();
 		int read_block(int &i, int j); // used in multi-way merge to fill RAM

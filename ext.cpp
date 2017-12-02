@@ -132,6 +132,21 @@ void Ext::fill_RAM()
 	//cout << t << endl;
 }
 
+bool Ext::is_RAM_empty()
+{
+	int i{ 0 };
+	bool ans{ false };
+	for (i = 0; i < 4096; ++i) {
+		if (RAM[i].key != 0) {
+			break;
+		}
+	}
+	if (i == 4096) {
+		ans = true;
+	}
+	return ans;
+}
+
 int Ext::fill_input_buffer()
 {
 	/*if (input_buffer.size() == 512) {
@@ -157,6 +172,21 @@ int Ext::fill_input_buffer()
 		input_buffer[i] = temp;
 	}
 	return i;
+}
+
+bool Ext::is_input_buffer_empty()
+{
+	int i{ 0 };
+	bool ans{ false };
+	for (i = 0; i < 512; ++i) {
+		if (input_buffer[i].key != 0) {
+			break;
+		}
+	}
+	if (i == 512) {
+		ans = true;
+	}
+	return ans;
 }
 
 int Ext::calc_RAM()
@@ -256,7 +286,7 @@ void Ext::replacement_selection()
 	out.open(output_name, fstream::app | fstream::in | fstream::out); // initialize mark
 	mark.push_back(out.tellg());
 	//out.close();
-	while (!in.eof()) {
+	while ((in.peek() != EOF) || !is_input_buffer_empty()) {
 		if (is_output_buffer_full()) {
 			write();
 			refresh_output_buffer();
@@ -281,10 +311,10 @@ void Ext::replacement_selection()
 		Record input;
 		if (i >= 0) {
 			input = input_buffer[i];
-			input_buffer[i--].key = NULL;
+			input_buffer[i--].key = 0;
 		}
-		if (input.key == NULL) { // no input, input-buffer is empty
-			while (length >= 1) {
+		if (input.key == 0) { // no input, input-buffer is empty
+			/*while (length >= 1) {
 				if (is_output_buffer_full()) {
 					write();
 					refresh_output_buffer();
@@ -298,7 +328,7 @@ void Ext::replacement_selection()
 			//RAM.clear();
 			refresh_RAM();
 			refresh_output_buffer();//output_buffer.clear();
-			j = 0;
+			j = 0;*/
 			break;
 		}
 		else if (!less(input, RAM[0])) { // if the input record has greater key value than the root record
@@ -321,8 +351,32 @@ void Ext::replacement_selection()
 			j = 0;
 		}
 		output_buffer[j++] = RAM[0];
-		swap(RAM[0], RAM[--length]);
+		swap(RAM[0], RAM[length - 1]);
+		RAM[length - 1].key = 0; // !!!!no need to store this record
+		--length;
 		sink(0, length);
+	}
+
+	if (!is_RAM_empty()) { // still elements left in RAM to build another run
+		write();
+		refresh_output_buffer();
+		j = 0;
+		mark.push_back(out.tellg());
+		//fill_RAM();
+		length = calc_RAM();
+		build_min_heap(length);
+		while (length >= 1) { // write the remaining heap in RAM
+			if (is_output_buffer_full()) {
+				write();
+				refresh_output_buffer();
+				j = 0;
+			}
+			output_buffer[j++] = RAM[0];
+			swap(RAM[0], RAM[length - 1]);
+			RAM[length - 1].key = 0; // !!!!no need to store this record
+			--length;
+			sink(0, length);
+		}
 	}
 	write();
 	refresh_output_buffer(); // get ready for multi-way merge
@@ -503,5 +557,5 @@ void Ext::multiway_merge()
 void Ext::ext_sort()
 {
 	replacement_selection();
-	multiway_merge();
+	//multiway_merge();
 }
