@@ -21,8 +21,8 @@ class Ext {
 		bool is_input_buffer_empty(); // used in replacement selection to judge whether input buffer has elements
 		int calc_RAM();
 		bool is_output_buffer_full();
-		int read_block(int &i, int j); // used in multi-way merge to fill RAM
-		void exhaust_run(vector<int> &mp, vector<Record> &buffer_compare, vector<int> &b, vector<fstream::pos_type> &t, int sign, int min); // used in multy-way merge when certain run has been exhausted
+		int read_block(int &i, int j, vector<fstream::pos_type> origin_mark, vector<vector<fstream::pos_type>*> all_mark, int u, fstream::pos_type end_mark); // used in multi-way merge to fill RAM
+		void exhaust_run(vector<int> &mp, vector<Record> &buffer_compare, vector<int> &b, vector<vector<fstream::pos_type>*> all_mark, int sign, int min); // used in multy-way merge when certain run has been exhausted
 		void refresh_RAM();
 		void refresh_output_buffer();
 		void refresh_input_buffer();
