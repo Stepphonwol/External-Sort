@@ -5,6 +5,8 @@
 #include <array>
 #include <string>
 #include <random>
+#include <ctime>
+#include <unordered_map>
 
 using namespace std;
 

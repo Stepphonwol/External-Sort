@@ -10,6 +10,7 @@ Ext::Ext(long long x) {
 	cin >> ans_name;
 	generate_input();
 	ext_sort();
+	test();
 	//read();
 	//replacement_selection();
 	/*fill_RAM();
@@ -291,6 +292,7 @@ void Ext::replacement_selection()
 	fill_RAM(); // Fill RAM from fisk
 	int i = fill_input_buffer() - 1; // Fill input buffer from disk, pointer on the input buffer
 	int j{ 0 }; // pointer on the output buffer
+	int l{ 0 }; // length of each run
 	int length = calc_RAM(); // the actual size of the heap
 	build_min_heap(length); // Build a min heap on RAM
 	out.open(output_name, fstream::app | fstream::in | fstream::out); // initialize mark
@@ -308,6 +310,8 @@ void Ext::replacement_selection()
 			j = 0; // get ready for the next run 
 			//out.open(output_name, fstream::app | fstream::in | fstream::out);
 			mark.push_back(out.tellp()); // end of the current run (beginning of the next run)
+			mark_length.push_back(l);
+			l = 0; // a new run
 			//out.close();
 			fill_RAM(); // get ready for the next run
 			length = calc_RAM();; // initialize the next run (heap size)
@@ -315,6 +319,7 @@ void Ext::replacement_selection()
 			continue;
 		}
 		output_buffer[j++] = RAM[0];// Send the record with minimum key value to output buffer
+		++l; // run increasing
 		if (i < 0) {
 			i = fill_input_buffer() - 1;
 		}
@@ -361,6 +366,7 @@ void Ext::replacement_selection()
 			j = 0;
 		}
 		output_buffer[j++] = RAM[0];
+		++l;
 		swap(RAM[0], RAM[length - 1]);
 		RAM[length - 1].key = 0; // !!!!no need to store this record
 		--length;
@@ -372,6 +378,8 @@ void Ext::replacement_selection()
 		refresh_output_buffer();
 		j = 0;
 		mark.push_back(out.tellg());
+		mark_length.push_back(l);
+		l = 0;
 		//fill_RAM();
 		length = calc_RAM();
 		build_min_heap(length);
@@ -382,6 +390,7 @@ void Ext::replacement_selection()
 				j = 0;
 			}
 			output_buffer[j++] = RAM[0];
+			++l;
 			swap(RAM[0], RAM[length - 1]);
 			RAM[length - 1].key = 0; // !!!!no need to store this record
 			--length;
@@ -390,140 +399,99 @@ void Ext::replacement_selection()
 	}
 	write();
 	refresh_output_buffer(); // get ready for multi-way merge
+	mark_length.push_back(l);
 	j = 0;
 	refresh_RAM(); // get ready for multi-way merge
 	out.close(); // get ready for multi-way merge
 }
 
-int Ext::read_block(int &i, int j, vector<fstream::pos_type> origin_mark, vector<vector<fstream::pos_type>*> all_mark, int u, fstream::pos_type end_mark)
+int Ext::read_block(int &i, int j, int u, vector<vector<int>*> all_mark_length)
 {
 	int sign{ 0 };
-	//bool cmp{ true };
 	while (sign != 512) {
-	   	/*if (j != mark.size() - 1 && out.tellg() >= mark[j + 1]) {
+		int delete_sign = *(all_mark_length[u]->begin() + j);
+		if (delete_sign == 0) {
 			break;
-		}*/
+		}
 		int temp_value;
 		float temp_key;
 		auto old_pos = out.tellg();
 		out >> temp_value >> temp_key;
 		Record temp(temp_value, temp_key);
-		/*if (u == 0 && out.tellg() == end_mark && j == all_mark[u].size() - 1) { // when merging runs, eof() couldn't be used
-			//out.clear();
-			out.seekg(old_pos);
-			return i; // run exhausted
-		}
-		if (u == 1 && out.eof() && j == all_mark[u].size() - 1) { // when merging super-runs, eof() could be used
-			out.clear();
-			out.seekg(old_pos);
-			return i;
-		}
-		if (j != all_mark[u].size() - 1 && out.tellg() == origin_mark[j + 1]) {
-			out.seekg(old_pos);
-			return i; // run exhausted
-			//cmp = false;
-		} // encounters the next run*/
 		if (out.eof()) {
 			out.clear();
 			out.seekg(old_pos);
-			return i;
-		}
-		if (less(temp, RAM[i])) {
-			out.seekg(old_pos);
-			return i;
+			break;
 		}
 		RAM[i++] = temp;
 		++sign;
+		--*(all_mark_length[u]->begin() + j);
 	}
 	return i;
 }
 
-void Ext::exhaust_run(vector<int> &mp, vector<Record> &buffer_compare, vector<int> &b, vector<vector<fstream::pos_type>*> all_mark, int sign, int min)
+void Ext::exhaust_run(vector<int> &mp, vector<Record> &buffer_compare, vector<vector<fstream::pos_type>*> all_mark, vector<vector<int>*> all_mark_length, vector<int>& break_points, int sign, int min)
 {
 	mp.erase(mp.begin() + min);
 	buffer_compare.erase(buffer_compare.begin() + min);
-	b.erase(b.begin() + min);
+	break_points.erase(break_points.begin() + min);
 	if (sign == 0) {
 		all_mark[sign]->erase(all_mark[sign]->begin() + min);
+		all_mark_length[sign]->erase(all_mark_length[sign]->begin() + min);
 	}
 	else if (sign == 1) {
 		all_mark[sign]->erase(all_mark[sign]->begin() + min);
+		all_mark_length[sign]->erase(all_mark_length[sign]->begin() + min);
 	}
-	//a[sign].erase(a[sign].begin() + min);
 }
 
 void Ext::multiway_merge()
 {
 	int u{ 0 }; // u = 0, merge runs; u = 1; merge super-runs
+	int l{ 0 }; // store the length of runs
 	out.open(output_name, fstream::ate | fstream::in | fstream::out);
 	//out.seekg(0, fstream::end);
 	vector<vector<fstream::pos_type>*> all_mark;
+	vector<vector<int>*> all_mark_length;
 	vector<fstream::pos_type> temp_mark; // store super runs
+	vector<int> temp_mark_length; // store the length of super runs
 	temp_mark.push_back(out.tellg());
-	all_mark.push_back(&mark);
+	all_mark.push_back(&mark); // initialize mark container
 	all_mark.push_back(&temp_mark);
-	//super_mark.push_back(out.tellg());
-	//out.seekg(0, fstream::beg);
-	while (!all_mark[0]->empty() || !all_mark[1]->empty()) {
+	all_mark_length.push_back(&mark_length); // initialize mark length container
+	all_mark_length.push_back(&temp_mark_length);
+	while (!all_mark[u]->empty()) {
 		vector<int> mp; // contains pointers on each run
 		vector<Record> buffer_compare; // contains the first records from each run
 		vector<int> break_points; // ending positions for each block
-		vector<fstream::pos_type> origin_mark{ *all_mark[u] };
+		//vector<fstream::pos_type> origin_mark{ *all_mark[u] };
 		int i{ 0 }; // pointer on RAM
 		int j{ 0 }; // pointer on MARK
 		int k{ 0 }; // pointer on output buffer
 		int min{ 0 }; // minimum index
-		//mp.push_back(i); // the first position
 		for (j = 0; j < all_mark[u]->size() && i < 4096; ++j) {
-			//vector<fstream::pos_type> cur_mark = *all_mark[u];
-			//auto update_mark = *(all_mark[u]->begin() + j);
 			out.seekg(*(all_mark[u]->begin() + j));
-			//auto show_pos1 = out.tellg();
 			mp.push_back(i);
-			read_block(i, j, origin_mark, all_mark, u, temp_mark[0]); // i += 512
+			read_block(i, j, u, all_mark_length); // i += 512
 			break_points.push_back(i);
-			//auto show_pos2 = out.tellg();
 			*(all_mark[u]->begin() + j) = out.tellg(); // !!! update the reading position for each run
 		} // initialize current run for multi-way merge
-		/*while (1) { 
-			if (j >= all_mark[u].size()) {
-				break;
-			}
-			out.seekg(all_mark[u][j]);
-			read_block(i, j); // i += 512
-			all_mark[u][j++] = out.tellg(); // update the reading postion for each run
-			if (i != 4096 && i != 512 * all_mark[u].size()) {
-				mp.push_back(i);
-			}
-			else {
-				break;
-			}
-		} // initialize current pass for multi-way merge*/
-		/*for (auto c : mp) {
-			break_points.push_back(-1);
-		}*/
 		for (auto c : mp) {
 			buffer_compare.push_back(RAM[c]);
 		} // initialize comparing buffer
 		vector<int> origin_mp = mp; // save the beginning position for each run
-		while (!mp.empty() && !buffer_compare.empty() && !break_points.empty()) { // a new pass begins
+		while (!mp.empty() && !buffer_compare.empty() && !all_mark_length[u]->empty()) { // a new pass begins
 			for (int i = 0; i < buffer_compare.size(); ++i) {
+				//int cur_length = *(all_mark_length[u]->begin() + i);
 				if (mp[i] >= break_points[i]) { // this run has been exhausted
-					exhaust_run(mp, buffer_compare, break_points, all_mark, u, i);
-					/*if (u == 0) {
-						all_mark[0] = mark; // update mark
-					}
-					else if (u == 1) {
-						all_mark[1] = temp_mark; // update temp-mark
-					}*/
+					exhaust_run(mp, buffer_compare, all_mark, all_mark_length, break_points, u, i);
 					continue;
 				}
 				if (buffer_compare[i].key == 0) {
 					buffer_compare[i] = RAM[mp[i]];
-					//RAM[mp[i]] = 0;
 				}
 			} // refill the comparing buffer from RAM
-			if (mp.empty() || buffer_compare.empty() || break_points.empty()) {
+			if (mp.empty() || buffer_compare.empty() || all_mark_length[u]->empty()) {
 				break;
 			}
 			min = 0;
@@ -542,39 +510,24 @@ void Ext::multiway_merge()
 				refresh_output_buffer();
 				k = 0;
 			}
-			output_buffer[k++] = buffer_compare[min]; // get the least record of the comparing buffer to 
+			output_buffer[k++] = buffer_compare[min]; // get the least record of the comparing buffer to output buffer
+			++l;
 			buffer_compare[min].key = 0; // minimum element has been sent to output buffer
 			++mp[min]; // move to the next record in the run whose head element has been sent to output buffer
-			//bool sign{ true };
 			if (mp[min] - origin_mp[min] >= 512) { // this block has been all sent to output buffer
 				i = origin_mp[min]; // refill this block
 				out.seekg(*(all_mark[u]->begin() + min));
 				auto pos1 = out.tellg();
 				j = min;
-				break_points[j] = read_block(i, j, origin_mark, all_mark, u, temp_mark[0]);
+				int receive = read_block(i, j, u, all_mark_length);
 				*(all_mark[u]->begin() + min) = out.tellg(); // !!!!! update the reading position of this run
 				auto pos2 = out.tellg();
 				if (pos1 != pos2) { // only when new records were read, then rewinding is necessary
 					mp[min] = origin_mp[min]; // rewind
+					break_points[j] = receive;
 				}
 			}
-			//out.seekg(mark[min]);
-			/*if ((min == mark.size() - 1 && out.peek() == EOF) || !sign) { // this run has been exhausted
-				buffer_compare.erase(buffer_compare.begin() + min);
-				mp.erase(mp.begin() + min);
-				mark.erase(mark.begin() + min);
-			}*/
 		}
-		/*if (is_output_buffer_full()) {
-			if (u == 0) {
-				temp_write();
-			}
-			else if (u == 1) {
-				final_write();
-			}
-			refresh_output_buffer();
-			k = 0;
-		}*/
 		if (u == 0) {
 			temp_write();
 		}
@@ -586,27 +539,67 @@ void Ext::multiway_merge()
 		refresh_RAM();
 		out.close();
 		out.open(output_name, fstream::ate | fstream::in | fstream::out);
-		//out.seekg(-1, fstream::end);
-		//auto show_pos1 = out.tellg();
-		//out.clear();
-		//auto show_pos2 = out.tellg();
 		all_mark[1]->push_back(out.tellg());
+		all_mark_length[1]->push_back(l);
+		l = 0;
 		if (all_mark[0]->empty()) { // all runs are exhausted
-			//temp_mark.push_back(out.tellg());
-			u = 1;
+			u = 1; // start merging super runs
 			all_mark[1]->erase(all_mark[1]->end() - 1);
-			//mark = temp_mark;
 		}
 	}
-	//super_mark.erase(super_mark.end() - 1); // last positon is useless
-	/*while (!super_mark.empty()) {
-		
-	}*/
 	out.close();
 }
 
 void Ext::ext_sort()
 {
+	double sum{ 0 };
+	auto start_time = clock();
 	replacement_selection();
 	multiway_merge();
+	auto end_time = clock();
+	sum += (double)(end_time - start_time) / CLOCKS_PER_SEC;
+}
+
+void Ext::test()
+{
+	int count{ 0 };
+	fstream test_input;
+	fstream test_output;
+	test_input.open(input_name, fstream::in);
+	test_output.open(ans_name, fstream::in);
+	while (1) { // initialize test table
+		int temp_val;
+		double temp_key;
+		test_input >> temp_val >> temp_key;
+		if (test_input.eof()) {
+			break;
+		}
+		test_table[temp_key] = true;
+	}
+	test_input.close();
+	while (1) { // verify output
+		int temp_val;
+		double temp_key;
+		test_output >> temp_val >> temp_key;
+		if (test_output.eof()) {
+			break;
+		}
+		test_table[temp_key] = false;
+		++count;
+	}
+	test_output.close();
+	test_input.open(input_name, fstream::in);
+	while (1) { // output the missing records
+		int temp_val;
+		double temp_key;
+		test_input >> temp_val >> temp_key;
+		if (test_input.eof()) {
+			break;
+		}
+		if (test_table[temp_key] == true) {
+			cout << temp_key << endl;
+		}
+	}
+	cout << count << endl;
+	test_input.close();
 }
