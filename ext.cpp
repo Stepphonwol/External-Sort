@@ -9,8 +9,11 @@ Ext::Ext(long long x) {
 	cout << "Name of the output text : " << endl;
 	cin >> ans_name;
 	generate_input();
+	auto start = clock();
 	ext_sort();
+	auto end = clock();
 	test();
+	cout << "Total running time: " << (double)(end - start) / CLOCKS_PER_SEC << endl;
 	//read();
 	//replacement_selection();
 	/*fill_RAM();
@@ -329,25 +332,9 @@ void Ext::replacement_selection()
 			input_buffer[i--].key = 0;
 		}
 		if (input.key == 0) { // no input, input-buffer is empty
-			/*while (length >= 1) {
-				if (is_output_buffer_full()) {
-					write();
-					refresh_output_buffer();
-					j = 0;
-				}
-				output_buffer[j++] = RAM[0];
-				swap(RAM[0], RAM[--length]);
-				sink(0, length);
-			}
-			write();
-			//RAM.clear();
-			refresh_RAM();
-			refresh_output_buffer();//output_buffer.clear();
-			j = 0;*/
 			break;
 		}
 		else if (!less(input, RAM[0])) { // if the input record has greater key value than the root record
-			//output_buffer.push_back(input); 
 			RAM[0] = input; // place the input record at the root
 		}
 		else {
@@ -399,7 +386,7 @@ void Ext::replacement_selection()
 	}
 	write();
 	refresh_output_buffer(); // get ready for multi-way merge
-	mark_length.push_back(l);
+	mark_length.push_back(l); // length of the last run
 	j = 0;
 	refresh_RAM(); // get ready for multi-way merge
 	out.close(); // get ready for multi-way merge
@@ -410,7 +397,7 @@ int Ext::read_block(int &i, int j, int u, vector<vector<int>*> all_mark_length)
 	int sign{ 0 };
 	while (sign != 512) {
 		int delete_sign = *(all_mark_length[u]->begin() + j);
-		if (delete_sign == 0) {
+		if (delete_sign == 0) { // run exhausted
 			break;
 		}
 		int temp_value;
@@ -450,7 +437,6 @@ void Ext::multiway_merge()
 	int u{ 0 }; // u = 0, merge runs; u = 1; merge super-runs
 	int l{ 0 }; // store the length of runs
 	out.open(output_name, fstream::ate | fstream::in | fstream::out);
-	//out.seekg(0, fstream::end);
 	vector<vector<fstream::pos_type>*> all_mark;
 	vector<vector<int>*> all_mark_length;
 	vector<fstream::pos_type> temp_mark; // store super runs
@@ -464,7 +450,6 @@ void Ext::multiway_merge()
 		vector<int> mp; // contains pointers on each run
 		vector<Record> buffer_compare; // contains the first records from each run
 		vector<int> break_points; // ending positions for each block
-		//vector<fstream::pos_type> origin_mark{ *all_mark[u] };
 		int i{ 0 }; // pointer on RAM
 		int j{ 0 }; // pointer on MARK
 		int k{ 0 }; // pointer on output buffer
@@ -482,7 +467,6 @@ void Ext::multiway_merge()
 		vector<int> origin_mp = mp; // save the beginning position for each run
 		while (!mp.empty() && !buffer_compare.empty() && !all_mark_length[u]->empty()) { // a new pass begins
 			for (int i = 0; i < buffer_compare.size(); ++i) {
-				//int cur_length = *(all_mark_length[u]->begin() + i);
 				if (mp[i] >= break_points[i]) { // this run has been exhausted
 					exhaust_run(mp, buffer_compare, all_mark, all_mark_length, break_points, u, i);
 					continue;
@@ -524,7 +508,7 @@ void Ext::multiway_merge()
 				auto pos2 = out.tellg();
 				if (pos1 != pos2) { // only when new records were read, then rewinding is necessary
 					mp[min] = origin_mp[min]; // rewind
-					break_points[j] = receive;
+					break_points[j] = receive; // !!!!!!!!!! update the break points only when new records were read
 				}
 			}
 		}
@@ -552,19 +536,16 @@ void Ext::multiway_merge()
 
 void Ext::ext_sort()
 {
-	double sum{ 0 };
-	auto start_time = clock();
 	replacement_selection();
 	multiway_merge();
-	auto end_time = clock();
-	sum += (double)(end_time - start_time) / CLOCKS_PER_SEC;
 }
 
 void Ext::test()
 {
-	int count{ 0 };
+	long long count{ 0 };
 	fstream test_input;
 	fstream test_output;
+	stack<double> s;
 	test_input.open(input_name, fstream::in);
 	test_output.open(ans_name, fstream::in);
 	while (1) { // initialize test table
@@ -584,8 +565,17 @@ void Ext::test()
 		if (test_output.eof()) {
 			break;
 		}
+		if (!s.empty()) {
+			double prev = s.top();
+			if (temp_key >= prev) {
+				++count;
+			}
+			else {
+				cout << "Wrong sorting!!!" << endl;
+			}
+		}
 		test_table[temp_key] = false;
-		++count;
+		s.push(temp_key);
 	}
 	test_output.close();
 	test_input.open(input_name, fstream::in);
@@ -600,6 +590,9 @@ void Ext::test()
 			cout << temp_key << endl;
 		}
 	}
-	cout << count << endl;
+	if (count == n - 1) {
+		cout << "All elements are in place!!!" << endl
+			<< "No records missing!!!" << endl;
+	}
 	test_input.close();
 }

@@ -6,6 +6,7 @@
 #include <string>
 #include <random>
 #include <ctime>
+#include <stack>
 #include <unordered_map>
 
 using namespace std;
